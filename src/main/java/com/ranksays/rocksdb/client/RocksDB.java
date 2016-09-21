@@ -3,7 +3,6 @@ package com.ranksays.rocksdb.client;
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.Base64;
@@ -112,7 +111,6 @@ public class RocksDB {
 				throw new IllegalArgumentException("Key can not be null");
 			}
 		}
-		HttpURLConnection con = openConnection("/get");
 
 		JSONObject req = new JSONObject();
 		req.put("db", db);
@@ -121,9 +119,8 @@ public class RocksDB {
 			keyArr.put(Base64.getEncoder().encodeToString(key));
 		}
 		req.put("keys", keyArr);
-		con.getOutputStream().write(req.toString().getBytes(ENCODING));
 
-		Response resp = Response.fromJSON(parseResponse(con.getInputStream()));
+		Response resp = doRequest("/get", req);
 
 		if (resp.getCode() == Response.CODE_OK) {
 			JSONArray arr = (JSONArray) resp.getResults();
@@ -185,7 +182,6 @@ public class RocksDB {
 		if (keys.length != values.length) {
 			throw new IllegalArgumentException("Number of keys and values does not match");
 		}
-		HttpURLConnection con = openConnection("/put");
 
 		JSONObject req = new JSONObject();
 		req.put("db", db);
@@ -199,9 +195,8 @@ public class RocksDB {
 			valueArr.put(Base64.getEncoder().encodeToString(value));
 		}
 		req.put("values", valueArr);
-		con.getOutputStream().write(req.toString().getBytes(ENCODING));
 
-		Response resp = Response.fromJSON(parseResponse(con.getInputStream()));
+		Response resp = doRequest("/put", req);
 
 		if (resp.getCode() != Response.CODE_OK) {
 			throw new IOException("code: " + resp.getCode() + ", message: " + resp.getMessage());
@@ -239,7 +234,6 @@ public class RocksDB {
 				throw new IllegalArgumentException("Key can not be null");
 			}
 		}
-		HttpURLConnection con = openConnection("/remove");
 
 		JSONObject req = new JSONObject();
 		req.put("db", db);
@@ -248,9 +242,8 @@ public class RocksDB {
 			keyArr.put(Base64.getEncoder().encodeToString(key));
 		}
 		req.put("keys", keyArr);
-		con.getOutputStream().write(req.toString().getBytes(ENCODING));
 
-		Response resp = Response.fromJSON(parseResponse(con.getInputStream()));
+		Response resp = doRequest("/remove", req);
 
 		if (resp.getCode() != Response.CODE_OK) {
 			throw new IOException("code: " + resp.getCode() + ", message: " + resp.getMessage());
@@ -268,43 +261,36 @@ public class RocksDB {
 		if (db == null) {
 			throw new IllegalArgumentException();
 		}
-		HttpURLConnection con = openConnection("/drop_database");
 
 		JSONObject req = new JSONObject();
 		req.put("db", db);
-		con.getOutputStream().write(req.toString().getBytes(ENCODING));
 
-		Response resp = Response.fromJSON(parseResponse(con.getInputStream()));
+		Response resp = doRequest("/drop_database", req);
 
 		if (resp.getCode() != Response.CODE_OK) {
 			throw new IOException("code: " + resp.getCode() + ", message: " + resp.getMessage());
 		}
 	}
 
-	private HttpURLConnection openConnection(String uri) throws IOException {
+	private Response doRequest(String uri, JSONObject req) throws IOException {
 		URL url = new URL("http://" + hostname + ":" + port + uri);
 		HttpURLConnection con = (HttpURLConnection) url.openConnection();
-
-		if (authEnabled) {
-			String auth = username + ":" + password;
-			String authHeader = "Basic " + Base64.getEncoder().encodeToString(auth.getBytes(ENCODING));
-			con.setRequestProperty("Authorization", authHeader);
-		}
-
 		con.setRequestMethod("POST");
 		con.setDoOutput(true);
 
-		return con;
-	}
+		if (authEnabled) {
+			String auth = username + ":" + password;
+			req.put("auth", Base64.getEncoder().encodeToString(auth.getBytes(ENCODING)));
+		}
+		con.getOutputStream().write(req.toString().getBytes(ENCODING));
 
-	private JSONObject parseResponse(InputStream input) throws IOException {
 		ByteArrayOutputStream buf = new ByteArrayOutputStream();
-		BufferedInputStream in = new BufferedInputStream(input);
-
+		BufferedInputStream in = new BufferedInputStream(con.getInputStream());
 		for (int c; (c = in.read()) != -1;) {
 			buf.write(c);
 		}
 
-		return new JSONObject(buf.toString(ENCODING));
+		JSONObject obj = new JSONObject(buf.toString(ENCODING));
+		return Response.fromJSON(obj);
 	}
 }
