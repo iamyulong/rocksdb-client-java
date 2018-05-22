@@ -15,26 +15,26 @@ import com.ranksays.rocksdb.client.RocksDB;
 
 public class Main {
 
-	public static void main(String[] args) throws IOException {
+    public static void main(String[] args) throws IOException {
 
-		RocksDB rdb = new RocksDB("localhost", 8516, true, "username", "password");
+        RocksDB rdb = new RocksDB("localhost", 8516, true, "username", "password");
 
-		String db = "test";
-		byte[] key = "k".getBytes();
-		byte[] value = "v".getBytes();
+        String db = "test";
+        byte[] key = "k".getBytes();
+        byte[] value = "v".getBytes();
 
-		// put
-		rdb.put(db, key, value);
+        // put
+        rdb.put(db, key, value);
 
-		// get
-		System.out.println(new String(rdb.get(db, key)));
+        // get
+        System.out.println(new String(rdb.get(db, key)));
 
-		// remove
-		rdb.remove(db, key);
+        // remove
+        rdb.remove(db, key);
 
-		// drop database
-		rdb.dropDatabase(db);
-	}
+        // drop database
+        rdb.dropDatabase(db);
+    }
 
 }
 ```
