@@ -5,9 +5,11 @@ import static org.junit.Assert.assertNull;
 
 import java.io.IOException;
 
+import org.junit.Ignore;
 import org.junit.Test;
 
 public class RocksDBTest {
+    @Ignore
 	@Test
 	public void testBasic() throws IOException {
 		String db = "test";
@@ -33,6 +35,7 @@ public class RocksDBTest {
 		rdb.dropDatabase(db);
 	}
 
+    @Ignore
 	@Test
 	public void testBatch() throws IOException {
 		String db = "test";
