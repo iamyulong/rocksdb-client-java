@@ -3,7 +3,7 @@ Java client for RocksDB Server
 
 ## How to use
 
-1. Download the latest release from <https://github.com/ywu123/rocksdb-client-java/releases>.
+1. Download the latest release from <https://github.com/iamyulong/rocksdb-client-java/releases>.
 2. Import the jar file to your project. You can either use the 'with-dependencies' version or the bare version.
 
 ## Usage example

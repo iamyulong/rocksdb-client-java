@@ -8,7 +8,7 @@
     <packaging>jar</packaging>
 
     <name>rocksdb-client-java</name>
-    <url>https://github.com/ywu123/rocksdb-client-java</url>
+    <url>https://github.com/iamyulong/rocksdb-client-java</url>
 
     <dependencies>
         <dependency>

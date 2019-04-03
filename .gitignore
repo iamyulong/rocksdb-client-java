@@ -3,3 +3,8 @@
 
 # Maven build target folder
 target/
+
+# IntelliJ
+*.iml
+.idea/
+target/
