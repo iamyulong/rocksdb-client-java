@@ -3,8 +3,13 @@
 
 # Maven build target folder
 target/
+dist/
 
 # IntelliJ
-*.iml
 .idea/
-target/
+*.iml
+
+# Eclipse
+.classpath
+.project
+.settings/
