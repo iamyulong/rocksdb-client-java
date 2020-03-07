@@ -1,296 +1,259 @@
 package com.ranksays.rocksdb.client;
 
-import java.io.BufferedInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.IOException;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.util.Base64;
-
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.BufferedInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.*;
+
 public class RocksDB {
-    private static final String ENCODING = "UTF-8";
+    public static final String DEFAULT_HOST = "127.0.0.1";
+    public static final int DEFAULT_PORT = 8516;
+    public static final String ENCODING = "UTF-8";
 
-    protected String hostname = "127.0.0.1";
-    protected int port = 8516;
+    protected String host;
+    protected int port;
 
-    protected boolean authEnabled = false;
-    protected String username = null;
-    protected String password = null;
-
-    /**
-     * Create a new RocksDB instance with default configuration (localhost and no
-     * authorization).
-     */
-    public RocksDB() {
-    }
+    protected boolean authEnabled;
+    protected String username;
+    protected String password;
 
     /**
-     * Create a new RocksDB instance with specified hostname and port
-     * 
-     * @param hostname
-     *            server hostname
-     * @param port
-     *            server port
+     * Creates a RocksDB instance.
+     *
+     * @param host        the server host
+     * @param port        the server port
+     * @param authEnabled whether is authorization enabled
+     * @param username    the username
+     * @param password    the password
      */
-    public RocksDB(String hostname, int port) {
-        this.hostname = hostname;
-        this.port = port;
-    }
-
-    /**
-     * Create a new RocksDB instance with specified auth credential.
-     * 
-     * @param username
-     *            auth user name
-     * @param password
-     *            auth password
-     */
-    public RocksDB(String username, String password) {
-        super();
-        this.authEnabled = true;
-        this.username = username;
-        this.password = password;
-    }
-
-    /**
-     * Create a new RocksDB instance.
-     * 
-     * @param hostname
-     *            server hostname
-     * @param port
-     *            server port
-     * @param authEnabled
-     *            is authorization enabled
-     * @param username
-     *            auth user name
-     * @param password
-     *            auth password
-     */
-    public RocksDB(String hostname, int port, boolean authEnabled, String username, String password) {
-        super();
-        this.hostname = hostname;
+    public RocksDB(String host, int port, boolean authEnabled, String username, String password) {
+        this.host = host;
         this.port = port;
         this.authEnabled = authEnabled;
         this.username = username;
         this.password = password;
     }
 
-    /**
-     * Get value by key in a specified database
-     * 
-     * @param db
-     *            database name
-     * @param key
-     *            key (can not be null)
-     * @return the retrieved value or null if not exists
-     * @throws IOException
-     */
-    public byte[] get(String db, byte[] key) throws IOException {
-        return getBatch(db, new byte[][] { key })[0];
+    public RocksDB(String host, int port, String username, String password) {
+        this(host, port, true, username, password);
+    }
+
+    public RocksDB(String host, int port) {
+        this(host, port, false, null, null);
+    }
+
+    public RocksDB(String username, String password) {
+        this(DEFAULT_HOST, DEFAULT_PORT, true, username, password);
+    }
+
+    public RocksDB() {
+        this(DEFAULT_HOST, DEFAULT_PORT);
+    }
+
+    public byte[] get(String name, byte[] key) throws IOException {
+        return get(name, Collections.singletonList(key)).get(0);
+    }
+
+    public String get(String name, String key) throws IOException {
+        return decode(get(name, encode(key)));
+    }
+
+    public void put(String name, byte[] key, byte[] value) throws IOException {
+        put(name, Collections.singletonList(key), Collections.singletonList(value));
+    }
+
+    public void put(String name, String key, String value) throws IOException {
+        put(name, encode(key), encode(value));
+    }
+
+    public void delete(String name, byte[] key) throws IOException {
+        delete(name, Collections.singletonList(key));
+    }
+
+    public void delete(String name, String key) throws IOException {
+        delete(name, encode(key));
+    }
+
+    @Deprecated
+    public byte[][] getBatch(String name, byte[][] keys) throws IOException {
+        return get(name, Arrays.asList(keys)).toArray(new byte[0][]);
+    }
+
+    @Deprecated
+    public void putBatch(String name, byte[][] keys, byte[][] values) throws IOException {
+        put(name, Arrays.asList(keys), Arrays.asList(values));
+    }
+
+    @Deprecated
+    public void remove(String name, byte[] key) throws IOException {
+        delete(name, key);
+    }
+
+    @Deprecated
+    public void removeBatch(String name, byte[][] keys) throws IOException {
+        delete(name, Arrays.asList(keys));
+    }
+
+    public byte[] encode(String str) throws UnsupportedEncodingException {
+        return str == null ? null : str.getBytes(ENCODING);
+    }
+
+    public String decode(byte[] bytes) throws UnsupportedEncodingException {
+        return bytes == null ? null : new String(bytes, ENCODING);
     }
 
     /**
-     * Get values by keys in a specified database
-     * 
-     * @param db
-     *            database name
-     * @param keys
-     *            keys (can not be null, length >= 1)
-     * @return the retrieved value or null if not exists
-     * @throws IOException
+     * Get key-value pairs from a given database.
+     *
+     * @param name the database name
+     * @param keys the keys
+     * @throws IOException when an I/O error occurs
      */
-    public byte[][] getBatch(String db, byte[][] keys) throws IOException {
-        if (db == null || keys == null || keys.length < 1) {
-            throw new IllegalArgumentException();
-        }
+    public List<byte[]> get(String name, List<byte[]> keys) throws IOException {
+        Objects.requireNonNull(name);
+        Objects.requireNonNull(keys);
+        keys.forEach(Objects::requireNonNull);
+
+        JSONObject request = new JSONObject();
+        request.put("name", name);
+        JSONArray array1 = new JSONArray();
         for (byte[] key : keys) {
-            if (key == null) {
-                throw new IllegalArgumentException("Key can not be null");
-            }
+            array1.put(Base64.getEncoder().encodeToString(key));
         }
+        request.put("keys", array1);
 
-        JSONObject req = new JSONObject();
-        req.put("db", db);
-        JSONArray keyArr = new JSONArray();
-        for (byte[] key : keys) {
-            keyArr.put(Base64.getEncoder().encodeToString(key));
+        JSONObject response = doRequest("/get", request);
+
+        List<byte[]> values = new ArrayList<>();
+        JSONArray array2 = response.getJSONArray("body");
+        for (int i = 0; i < array2.length(); i++) {
+            values.add(array2.isNull(i) ? null : Base64.getDecoder().decode(array2.getString(i)));
         }
-        req.put("keys", keyArr);
-
-        Response resp = doRequest("/get", req);
-
-        if (resp.getCode() == Response.CODE_OK) {
-            JSONArray arr = (JSONArray) resp.getResults();
-
-            byte[][] values = new byte[arr.length()][];
-            for (int i = 0; i < arr.length(); i++) {
-                if (arr.isNull(i)) {
-                    values[i] = null;
-                } else {
-                    values[i] = Base64.getDecoder().decode(arr.getString(i));
-                }
-            }
-            return values;
-        } else {
-            throw new IOException("code: " + resp.getCode() + ", message: " + resp.getMessage());
-        }
+        return values;
     }
 
     /**
-     * Set the value of specified key.
-     * 
-     * @param db
-     *            database name
-     * @param key
-     *            key (can not be null)
-     * @param value
-     *            value (can not be null)
-     * @throws IOException
+     * Put key-value pairs to a given database.
+     *
+     * @param name   the database name
+     * @param keys   the keys
+     * @param values the values
+     * @throws IOException when an I/O error occurs
      */
-    public void put(String db, byte[] key, byte[] value) throws IOException {
-        putBatch(db, new byte[][] { key }, new byte[][] { value });
-    }
+    public void put(String name, List<byte[]> keys, List<byte[]> values) throws IOException {
+        Objects.requireNonNull(name);
+        Objects.requireNonNull(keys);
+        Objects.requireNonNull(values);
+        keys.forEach(Objects::requireNonNull);
 
-    /**
-     * Set the values of specified keys.
-     * 
-     * @param db
-     *            database name
-     * @param keys
-     *            keys (can not be null, length >=1)
-     * @param values
-     *            values (can not be null, length >=1)
-     * @throws IOException
-     */
-    public void putBatch(String db, byte[][] keys, byte[][] values) throws IOException {
-        if (db == null || keys == null || values == null || keys.length < 1 || values.length < 1) {
-            throw new IllegalArgumentException();
-        }
+        JSONObject request = new JSONObject();
+        request.put("name", name);
+        JSONArray array1 = new JSONArray();
         for (byte[] key : keys) {
-            if (key == null) {
-                throw new IllegalArgumentException("Key can not be null");
-            }
+            array1.put(Base64.getEncoder().encodeToString(key));
         }
+        request.put("keys", array1);
+        JSONArray array2 = new JSONArray();
         for (byte[] value : values) {
-            if (value == null) {
-                throw new IllegalArgumentException("Value can not be null");
-            }
+            array2.put(value == null ? null : Base64.getEncoder().encodeToString(value));
         }
-        if (keys.length != values.length) {
-            throw new IllegalArgumentException("Number of keys and values does not match");
-        }
+        request.put("values", array2);
 
-        JSONObject req = new JSONObject();
-        req.put("db", db);
-        JSONArray keyArr = new JSONArray();
-        for (byte[] key : keys) {
-            keyArr.put(Base64.getEncoder().encodeToString(key));
-        }
-        req.put("keys", keyArr);
-        JSONArray valueArr = new JSONArray();
-        for (byte[] value : values) {
-            valueArr.put(Base64.getEncoder().encodeToString(value));
-        }
-        req.put("values", valueArr);
-
-        Response resp = doRequest("/put", req);
-
-        if (resp.getCode() != Response.CODE_OK) {
-            throw new IOException("code: " + resp.getCode() + ", message: " + resp.getMessage());
-        }
+        doRequest("/put", request);
     }
 
     /**
-     * Remove value associated with the specified key.
-     * 
-     * @param db
-     *            database name
-     * @param key
-     *            key (can not be null)
-     * @throws IOException
+     * Delete key-value pairs from a given database.
+     *
+     * @param name the database name
+     * @param keys the keys
+     * @throws IOException when an I/O error occurs
      */
-    public void remove(String db, byte[] key) throws IOException {
-        removeBatch(db, new byte[][] { key });
+    public void delete(String name, List<byte[]> keys) throws IOException {
+        Objects.requireNonNull(name);
+        Objects.requireNonNull(keys);
+        keys.forEach(Objects::requireNonNull);
+
+        JSONObject request = new JSONObject();
+        request.put("name", name);
+        JSONArray array1 = new JSONArray();
+        for (byte[] key : keys) {
+            array1.put(Base64.getEncoder().encodeToString(key));
+        }
+        request.put("keys", array1);
+
+        doRequest("/delete", request);
     }
 
     /**
-     * Remove values associated with the specified keys.
-     * 
-     * @param db
-     *            database name
-     * @param keys
-     *            keys (can not be null, length >= 1)
-     * @throws IOException
+     * Create a database.
+     *
+     * @param name the database name
+     * @throws IOException when an I/O error occurs
      */
-    public void removeBatch(String db, byte[][] keys) throws IOException {
-        if (db == null || keys == null || keys.length < 1) {
-            throw new IllegalArgumentException();
-        }
-        for (byte[] key : keys) {
-            if (key == null) {
-                throw new IllegalArgumentException("Key can not be null");
-            }
-        }
+    public void createDatabase(String name) throws IOException {
+        Objects.requireNonNull(name);
 
-        JSONObject req = new JSONObject();
-        req.put("db", db);
-        JSONArray keyArr = new JSONArray();
-        for (byte[] key : keys) {
-            keyArr.put(Base64.getEncoder().encodeToString(key));
-        }
-        req.put("keys", keyArr);
-
-        Response resp = doRequest("/remove", req);
-
-        if (resp.getCode() != Response.CODE_OK) {
-            throw new IOException("code: " + resp.getCode() + ", message: " + resp.getMessage());
-        }
+        JSONObject request = new JSONObject();
+        request.put("name", name);
+        doRequest("/create", request);
     }
 
     /**
      * Drop a database.
-     * 
-     * @param db
-     *            database name
-     * @throws IOException
+     *
+     * @param name the database name
+     * @throws IOException when an I/O error occurs
      */
-    public void dropDatabase(String db) throws IOException {
-        if (db == null) {
-            throw new IllegalArgumentException();
-        }
+    public void dropDatabase(String name) throws IOException {
+        Objects.requireNonNull(name);
 
-        JSONObject req = new JSONObject();
-        req.put("db", db);
-
-        Response resp = doRequest("/drop_database", req);
-
-        if (resp.getCode() != Response.CODE_OK) {
-            throw new IOException("code: " + resp.getCode() + ", message: " + resp.getMessage());
-        }
+        JSONObject request = new JSONObject();
+        request.put("name", name);
+        doRequest("/drop", request);
     }
 
-    private Response doRequest(String uri, JSONObject req) throws IOException {
-        URL url = new URL("http://" + hostname + ":" + port + uri);
+
+    /**
+     * Get statistics.
+     *
+     * @param name the database name
+     * @throws IOException when an I/O error occurs
+     */
+    public String getStats(String name) throws IOException {
+        Objects.requireNonNull(name);
+
+        JSONObject request = new JSONObject();
+        request.put("name", name);
+        JSONObject response = doRequest("/stats", request);
+
+        return response.getString("body");
+    }
+
+    protected JSONObject doRequest(String uri, JSONObject request) throws IOException {
+        URL url = new URL("http://" + host + ":" + port + uri);
         HttpURLConnection con = (HttpURLConnection) url.openConnection();
         con.setRequestMethod("POST");
         con.setDoOutput(true);
 
         if (authEnabled) {
             String auth = username + ":" + password;
-            req.put("auth", Base64.getEncoder().encodeToString(auth.getBytes(ENCODING)));
+            con.setRequestProperty("Authorization", "Basic " + Base64.getEncoder().encodeToString(auth.getBytes(ENCODING)));
         }
-        con.getOutputStream().write(req.toString().getBytes(ENCODING));
+        con.getOutputStream().write(request.toString().getBytes(ENCODING));
 
-        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
         BufferedInputStream in = new BufferedInputStream(con.getInputStream());
-        for (int c; (c = in.read()) != -1;) {
-            buf.write(c);
+        for (int c; (c = in.read()) != -1; ) {
+            buffer.write(c);
         }
 
-        JSONObject obj = new JSONObject(buf.toString(ENCODING));
-        return Response.fromJSON(obj);
+        return new JSONObject(buffer.toString(ENCODING));
     }
 }
