@@ -15,6 +15,8 @@ public class RocksDB {
     public static final String DEFAULT_HOST = "127.0.0.1";
     public static final int DEFAULT_PORT = 8516;
     public static final String ENCODING = "UTF-8";
+    public static final int CONNECT_TIMEOUT = 10_000;
+    public static final int READ_TIMEOUT = 10_000;
 
     protected String host;
     protected int port;
@@ -239,6 +241,8 @@ public class RocksDB {
     protected JSONObject doRequest(String uri, JSONObject request) throws IOException {
         URL url = new URL("http://" + host + ":" + port + uri);
         HttpURLConnection con = (HttpURLConnection) url.openConnection();
+        con.setConnectTimeout(CONNECT_TIMEOUT);
+        con.setReadTimeout(READ_TIMEOUT);
         con.setRequestMethod("POST");
         con.setDoOutput(true);
 
